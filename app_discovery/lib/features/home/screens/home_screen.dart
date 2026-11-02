@@ -384,36 +384,30 @@ class _HomeScreenState extends State<HomeScreen> {
                         ),
                       )
                     else
-                      // Posts List
+                      // Posts List (Edge-to-edge full width)
                       SliverList(
                         delegate: SliverChildBuilderDelegate(
                           (context, index) {
                             final post = displayedPosts[index];
                             final isFav = postProvider.isFavorite(post.id);
 
-                            return Padding(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 16,
-                                vertical: 6,
-                              ),
-                              child: PostCardWidget(
-                                post: post,
-                                isFavorite: isFav,
-                                onFavoritePressed: () async {
-                                  if (isFav) {
-                                    await postProvider.removeFromFavorites(post.id);
-                                  } else {
-                                    await postProvider.addToFavorites(post);
-                                  }
-                                },
-                                onTap: () {
-                                  Navigator.pushNamed(
-                                    context,
-                                    AppRouter.postDetails,
-                                    arguments: post.id,
-                                  );
-                                },
-                              ),
+                            return PostCardWidget(
+                              post: post,
+                              isFavorite: isFav,
+                              onFavoritePressed: () async {
+                                if (isFav) {
+                                  await postProvider.removeFromFavorites(post.id);
+                                } else {
+                                  await postProvider.addToFavorites(post);
+                                }
+                              },
+                              onTap: () {
+                                Navigator.pushNamed(
+                                  context,
+                                  AppRouter.postDetails,
+                                  arguments: post,
+                                );
+                              },
                             );
                           },
                           childCount: displayedPosts.length,

@@ -2,9 +2,11 @@ import 'package:flutter/material.dart';
 import '../../features/home/screens/main_screen.dart';
 import '../../features/categories/screens/category_posts_screen.dart';
 import '../../features/post_details/screens/post_details_screen.dart';
+import '../../features/profile/screens/privacy_policy_screen.dart';
 import '../../features/admin/screens/admin_login_screen.dart';
 import '../../features/admin/screens/admin_dashboard_screen.dart';
 import '../../models/category_model.dart';
+import '../../models/post_model.dart';
 
 class AppRouter {
   static const String home = '/';
@@ -13,6 +15,7 @@ class AppRouter {
   static const String profile = '/profile';
   static const String categoryPosts = '/category-posts';
   static const String postDetails = '/post-details';
+  static const String privacyPolicy = '/privacy-policy';
   static const String adminLogin = '/admin-login';
   static const String adminDashboard = '/admin-dashboard';
 
@@ -35,9 +38,23 @@ class AppRouter {
           builder: (_) => CategoryPostsScreen(category: category),
         );
       case postDetails:
-        final postId = settings.arguments as String?;
+        Post? initialPost;
+        String? postId;
+        if (settings.arguments is Post) {
+          initialPost = settings.arguments as Post;
+          postId = initialPost.id;
+        } else if (settings.arguments is String) {
+          postId = settings.arguments as String;
+        }
         return MaterialPageRoute(
-          builder: (_) => PostDetailsScreen(postId: postId),
+          builder: (_) => PostDetailsScreen(
+            postId: postId,
+            initialPost: initialPost,
+          ),
+        );
+      case privacyPolicy:
+        return MaterialPageRoute(
+          builder: (_) => const PrivacyPolicyScreen(),
         );
       case adminLogin:
         return MaterialPageRoute(builder: (_) => const AdminLoginScreen());

@@ -61,7 +61,7 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
               }
 
               return ListView.builder(
-                padding: const EdgeInsets.symmetric(vertical: 8),
+                padding: const EdgeInsets.only(top: 6, bottom: 24),
                 itemCount: postProvider.favoritePosts.length,
                 itemBuilder: (context, index) {
                   final post = postProvider.favoritePosts[index];
@@ -72,7 +72,7 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
                       Navigator.pushNamed(
                         context,
                         AppRouter.postDetails,
-                        arguments: post.id,
+                        arguments: post,
                       );
                     },
                     onFavoritePressed: () async {

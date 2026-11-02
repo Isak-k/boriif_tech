@@ -138,30 +138,73 @@ class PostProvider extends ChangeNotifier {
     }
   }
 
-  /// Fetch a single post by ID and record view accurately
-  Future<void> fetchPostById(String postId) async {
+  /// Set selected post synchronously for immediate (0ms) rendering
+  void setSelectedPost(Post post) {
+    _selectedPost = post;
+    _errorMessage = null;
+    _isLoading = false;
+    notifyListeners();
+  }
+
+  /// Record view silently in the background without triggering loading spinners
+  Future<void> recordViewSilently(String postId) async {
+    try {
+      final wasCounted = await _viewCounterService.recordView(postId);
+      if (wasCounted) {
+        if (_selectedPost != null && _selectedPost!.id == postId) {
+          final updatedViews = _selectedPost!.viewsCount + 1;
+          _selectedPost = _selectedPost!.copyWith(viewsCount: updatedViews);
+        }
+        final idx = _posts.indexWhere((p) => p.id == postId);
+        if (idx != -1) {
+          final updatedViews = _posts[idx].viewsCount + 1;
+          _posts[idx] = _posts[idx].copyWith(viewsCount: updatedViews);
+        }
+        notifyListeners();
+      }
+    } catch (e) {
+      print('✗ Error recording view silently: $e');
+    }
+  }
+
+  /// Fetch a single post by ID with performance optimizations:
+  /// Uses existing in-memory/cached post data immediately when available.
+  Future<void> fetchPostById(String postId, {Post? initialPost}) async {
+    if (initialPost != null) {
+      _selectedPost = initialPost;
+      _isLoading = false;
+      _errorMessage = null;
+      notifyListeners();
+      await recordViewSilently(postId);
+      return;
+    }
+
+    // Check if post already exists in memory
+    final existingPost = _posts.where((p) => p.id == postId).firstOrNull ??
+        _favoritePosts.where((p) => p.id == postId).firstOrNull;
+
+    if (existingPost != null) {
+      _selectedPost = existingPost;
+      _isLoading = false;
+      _errorMessage = null;
+      notifyListeners();
+      await recordViewSilently(postId);
+      return;
+    }
+
+    // Only if post is not in memory, show loading and fetch from service
     _isLoading = true;
     _errorMessage = null;
     notifyListeners();
 
     try {
       _selectedPost = await _postService.fetchPostById(postId);
-      if (_selectedPost != null) {
-        // Record view through ViewCounterService (handles Firestore increment and rate limiting)
-        final wasCounted = await _viewCounterService.recordView(postId);
-        if (wasCounted) {
-          // Immediately reflect incremented view count locally
-          final updatedViews = _selectedPost!.viewsCount + 1;
-          _selectedPost = _selectedPost!.copyWith(viewsCount: updatedViews);
-
-          final idx = _posts.indexWhere((p) => p.id == postId);
-          if (idx != -1) {
-            _posts[idx] = _posts[idx].copyWith(viewsCount: updatedViews);
-          }
-        }
-      }
       _isLoading = false;
       notifyListeners();
+
+      if (_selectedPost != null) {
+        await recordViewSilently(postId);
+      }
     } catch (e) {
       _errorMessage = e.toString();
       _isLoading = false;

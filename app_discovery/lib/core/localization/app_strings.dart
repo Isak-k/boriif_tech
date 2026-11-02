@@ -18,7 +18,7 @@ class AppStrings {
   // Common
   static const Map<String, Map<String, String>> common = {
     'en': {
-      'appName': 'App Discovery',
+      'appName': 'Boriif Tech',
       'appVersion': 'v1.0.0',
       'loading': 'Loading...',
       'error': 'Error',
@@ -35,7 +35,7 @@ class AppStrings {
       'noResults': 'No results found',
     },
     'om': {
-      'appName': 'App Discovery',
+      'appName': 'Boriif Tech',
       'appVersion': 'v1.0.0',
       'loading': 'Dirqama jira...',
       'error': 'Dhadhaa',

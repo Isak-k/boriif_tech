@@ -20,23 +20,19 @@ class AppBarWidget extends StatelessWidget implements PreferredSizeWidget {
     return AppBar(
       title: Row(
         children: [
-          SizedBox(
-            width: 40,
-            height: 40,
+          ClipRRect(
+            borderRadius: BorderRadius.circular(10),
             child: Container(
+              width: 36,
+              height: 36,
               decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                border: Border.all(color: AppColors.cyan, width: 2),
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: AppColors.cyan.withValues(alpha: 0.6), width: 1.5),
+                color: Colors.white,
               ),
-              child: const Center(
-                child: Text(
-                  'B',
-                  style: TextStyle(
-                    color: AppColors.cyan,
-                    fontSize: 20,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
+              child: Image.asset(
+                'assets/images/boriif_icon.png',
+                fit: BoxFit.contain,
               ),
             ),
           ),

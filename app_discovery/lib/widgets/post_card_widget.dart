@@ -3,6 +3,8 @@ import '../core/theme/app_colors.dart';
 import '../models/post_model.dart';
 import 'cached_app_image.dart';
 
+/// Full-width edge-to-edge post card widget.
+/// Utilizes the full device screen width with clean typography and spacing.
 class PostCardWidget extends StatelessWidget {
   final Post post;
   final bool isFavorite;
@@ -19,39 +21,55 @@ class PostCardWidget extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Card(
-      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-      elevation: 2,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(12),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // Image section with automatic device disk caching
-            _buildImageSection(),
-            
-            // Content section
-            Padding(
-              padding: const EdgeInsets.all(16),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  // Title and favorite
-                  _buildTitleSection(context),
-                  const SizedBox(height: 8),
-                  
-                  // Description
-                  _buildDescription(context),
-                  const SizedBox(height: 12),
-                  
-                  // Meta information
-                  _buildMetaSection(context),
-                ],
+    return Container(
+      width: double.infinity,
+      margin: const EdgeInsets.only(bottom: 12),
+      decoration: BoxDecoration(
+        color: const Color(0xFF101726),
+        border: Border(
+          top: BorderSide(
+            color: Colors.white.withValues(alpha: 0.06),
+            width: 0.8,
+          ),
+          bottom: BorderSide(
+            color: Colors.white.withValues(alpha: 0.08),
+            width: 1,
+          ),
+        ),
+      ),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: onTap,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Full-width edge-to-edge image section
+              _buildImageSection(),
+
+              // Content section with comfortable internal padding
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // Title and favorite button
+                    _buildTitleSection(context),
+                    const SizedBox(height: 8),
+
+                    // Short description
+                    if (post.shortDescription.isNotEmpty) ...[
+                      _buildDescription(context),
+                      const SizedBox(height: 12),
+                    ],
+
+                    // Meta information row
+                    _buildMetaSection(context),
+                  ],
+                ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );
@@ -63,26 +81,14 @@ class PostCardWidget extends StatelessWidget {
     }
 
     return Container(
-      constraints: const BoxConstraints(minHeight: 140, maxHeight: 220),
       width: double.infinity,
-      decoration: const BoxDecoration(
-        color: Color(0xFF0F1522),
-        borderRadius: BorderRadius.only(
-          topLeft: Radius.circular(12),
-          topRight: Radius.circular(12),
-        ),
-      ),
-      child: ClipRRect(
-        borderRadius: const BorderRadius.only(
-          topLeft: Radius.circular(12),
-          topRight: Radius.circular(12),
-        ),
-        child: CachedAppImage(
-          imageUrl: post.imageUrl,
-          width: double.infinity,
-          fit: BoxFit.cover,
-          placeholderIcon: _getTypeIcon(post.postType),
-        ),
+      constraints: const BoxConstraints(minHeight: 160, maxHeight: 230),
+      color: const Color(0xFF0C101A),
+      child: CachedAppImage(
+        imageUrl: post.imageUrl,
+        width: double.infinity,
+        fit: BoxFit.cover,
+        placeholderIcon: _getTypeIcon(post.postType),
       ),
     );
   }
@@ -94,7 +100,12 @@ class PostCardWidget extends StatelessWidget {
         Expanded(
           child: Text(
             post.title,
-            style: Theme.of(context).textTheme.titleLarge,
+            style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                  fontWeight: FontWeight.bold,
+                  fontSize: 17,
+                  height: 1.3,
+                  color: Colors.white,
+                ),
             maxLines: 2,
             overflow: TextOverflow.ellipsis,
           ),
@@ -103,10 +114,12 @@ class PostCardWidget extends StatelessWidget {
           icon: Icon(
             isFavorite ? Icons.favorite : Icons.favorite_border,
             color: isFavorite ? AppColors.error : AppColors.textSecondary,
+            size: 22,
           ),
           onPressed: onFavoritePressed,
           padding: EdgeInsets.zero,
           constraints: const BoxConstraints(),
+          visualDensity: VisualDensity.compact,
         ),
       ],
     );
@@ -115,7 +128,11 @@ class PostCardWidget extends StatelessWidget {
   Widget _buildDescription(BuildContext context) {
     return Text(
       post.shortDescription,
-      style: Theme.of(context).textTheme.bodySmall,
+      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+            color: Colors.white70,
+            fontSize: 13,
+            height: 1.4,
+          ),
       maxLines: 2,
       overflow: TextOverflow.ellipsis,
     );
@@ -161,7 +178,7 @@ class PostCardWidget extends StatelessWidget {
             children: [
               Icon(
                 _getTypeIcon(post.postType),
-                size: 14,
+                size: 13,
                 color: _getTypeColor(post.postType),
               ),
               const SizedBox(width: 4),
@@ -189,11 +206,14 @@ class PostCardWidget extends StatelessWidget {
             const SizedBox(width: 4),
             Text(
               '${post.viewsCount}',
-              style: Theme.of(context).textTheme.bodySmall,
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: AppColors.textSecondary,
+                    fontSize: 12,
+                  ),
             ),
           ],
         ),
-        const SizedBox(width: 10),
+        const SizedBox(width: 12),
 
         // Likes count
         Row(
@@ -206,11 +226,15 @@ class PostCardWidget extends StatelessWidget {
             const SizedBox(width: 4),
             Text(
               '${post.likesCount}',
-              style: Theme.of(context).textTheme.bodySmall,
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: isFavorite ? AppColors.error : AppColors.textSecondary,
+                    fontSize: 12,
+                    fontWeight: isFavorite ? FontWeight.bold : FontWeight.normal,
+                  ),
             ),
           ],
         ),
-        const SizedBox(width: 10),
+        const SizedBox(width: 12),
 
         // Date
         Row(
@@ -223,7 +247,10 @@ class PostCardWidget extends StatelessWidget {
             const SizedBox(width: 4),
             Text(
               _formatDate(post.publishedAt ?? post.createdAt),
-              style: Theme.of(context).textTheme.bodySmall,
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: AppColors.textSecondary,
+                    fontSize: 12,
+                  ),
             ),
           ],
         ),

@@ -80,7 +80,7 @@ class _CategoryPostsScreenState extends State<CategoryPostsScreen> {
               return RefreshIndicator(
                 onRefresh: () => postProvider.fetchPostsByCategory(widget.category.id),
                 child: ListView.builder(
-                  padding: const EdgeInsets.symmetric(vertical: 8),
+                  padding: const EdgeInsets.only(top: 6, bottom: 24),
                   itemCount: postProvider.posts.length,
                   itemBuilder: (context, index) {
                     final post = postProvider.posts[index];
@@ -91,7 +91,7 @@ class _CategoryPostsScreenState extends State<CategoryPostsScreen> {
                         Navigator.pushNamed(
                           context,
                           AppRouter.postDetails,
-                          arguments: post.id,
+                          arguments: post,
                         );
                       },
                       onFavoritePressed: () async {

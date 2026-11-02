@@ -4,7 +4,7 @@
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE"/>
 
     <application
-        android:label="App Discovery"
+        android:label="Boriif Tech"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher">
         <activity
@@ -37,6 +37,7 @@
     </application>
     <!-- Required to query activities for web browsing and Play Store launching -->
     <queries>
+        <package android:name="com.android.vending" />
         <intent>
             <action android:name="android.intent.action.VIEW" />
             <data android:scheme="https" />

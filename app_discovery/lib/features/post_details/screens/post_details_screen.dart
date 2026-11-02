@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../../core/theme/app_colors.dart';
+import '../../../models/post_model.dart';
 import '../../../providers/post_provider.dart';
 import '../../../services/url_launcher_service.dart';
 import '../../../widgets/loading_indicator_widget.dart';
@@ -9,31 +10,55 @@ import '../../../widgets/cached_app_image.dart';
 
 class PostDetailsScreen extends StatefulWidget {
   final String? postId;
+  final Post? initialPost;
 
   const PostDetailsScreen({
-    Key? key,
+    super.key,
     this.postId,
-  }) : super(key: key);
+    this.initialPost,
+  });
 
   @override
   State<PostDetailsScreen> createState() => _PostDetailsScreenState();
 }
 
 class _PostDetailsScreenState extends State<PostDetailsScreen> {
+  Post? _localPost;
 
   @override
   void initState() {
     super.initState();
-    if (widget.postId != null) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        _loadPostDetails();
-      });
-    }
-  }
 
-  Future<void> _loadPostDetails() async {
-    final postProvider = context.read<PostProvider>();
-    await postProvider.fetchPostById(widget.postId!);
+    // 1. If an initial post was passed, use it immediately (0ms delay)
+    if (widget.initialPost != null) {
+      _localPost = widget.initialPost;
+    }
+
+    // 2. Schedule background initialization & view recording
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final postProvider = context.read<PostProvider>();
+
+      if (_localPost == null && widget.postId != null) {
+        // Try locating in existing provider memory first
+        final inMemory = postProvider.posts.where((p) => p.id == widget.postId).firstOrNull ??
+            postProvider.favoritePosts.where((p) => p.id == widget.postId).firstOrNull;
+
+        if (inMemory != null) {
+          setState(() {
+            _localPost = inMemory;
+          });
+          postProvider.setSelectedPost(inMemory);
+          postProvider.recordViewSilently(widget.postId!);
+          return;
+        }
+
+        // If not found in memory, fetch with provider
+        postProvider.fetchPostById(widget.postId!);
+      } else if (_localPost != null) {
+        postProvider.setSelectedPost(_localPost!);
+        postProvider.recordViewSilently(_localPost!.id);
+      }
+    });
   }
 
   @override
@@ -49,6 +74,15 @@ class _PostDetailsScreenState extends State<PostDetailsScreen> {
       ),
       body: Consumer<PostProvider>(
         builder: (context, postProvider, _) {
+          // Resolve post: prefer provider's selected post, fall back to initial local post
+          final post = postProvider.selectedPost ?? _localPost;
+
+          // If we already have post data, render it immediately without showing full-screen loader!
+          if (post != null) {
+            final isFavorite = postProvider.isFavorite(post.id);
+            return _buildPostContent(context, post, isFavorite, postProvider);
+          }
+
           if (postProvider.isLoading) {
             return const LoadingIndicatorWidget(message: 'Loading post...');
           }
@@ -59,71 +93,74 @@ class _PostDetailsScreenState extends State<PostDetailsScreen> {
               title: 'Error Loading Post',
               subtitle: postProvider.errorMessage ?? 'An error occurred',
               actionLabel: 'Go Back',
-              onActionPressed: () {
-                Navigator.pop(context);
-              },
+              onActionPressed: () => Navigator.pop(context),
             );
           }
 
-          if (postProvider.selectedPost == null) {
-            return EmptyStateWidget(
-              icon: Icons.article_outlined,
-              title: 'Post Not Found',
-              subtitle: 'The post you are looking for does not exist or has been unpublished.',
-              actionLabel: 'Go Back',
-              onActionPressed: () {
-                Navigator.pop(context);
-              },
-            );
-          }
-
-          final post = postProvider.selectedPost!;
-          final isFavorite = postProvider.isFavorite(post.id);
-
-          return SingleChildScrollView(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                // Header image
-                _buildHeaderImage(post),
-                
-                Padding(
-                  padding: const EdgeInsets.all(16),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      // Title and favorite button
-                      _buildTitleSection(post, isFavorite, postProvider),
-                      const SizedBox(height: 16),
-
-                      // Meta information (category, date, views)
-                      _buildMetaSection(post),
-                      const SizedBox(height: 24),
-
-                      // Short description
-                      _buildShortDescription(post),
-                      const SizedBox(height: 16),
-
-                      // Full description
-                      _buildFullDescription(post),
-                      const SizedBox(height: 24),
-
-                      // Action buttons (Get it now, Visit website, etc.)
-                      _buildActionButtons(post),
-                      const SizedBox(height: 24),
-                    ],
-                  ),
-                ),
-              ],
-            ),
+          return EmptyStateWidget(
+            icon: Icons.article_outlined,
+            title: 'Post Not Found',
+            subtitle: 'The post you are looking for does not exist or has been unpublished.',
+            actionLabel: 'Go Back',
+            onActionPressed: () => Navigator.pop(context),
           );
         },
       ),
     );
   }
 
-  Widget _buildHeaderImage(dynamic post) {
-    if (post.imageUrl == null || (post.imageUrl as String).isEmpty) {
+  Widget _buildPostContent(
+    BuildContext context,
+    Post post,
+    bool isFavorite,
+    PostProvider postProvider,
+  ) {
+    return SingleChildScrollView(
+      physics: const BouncingScrollPhysics(),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Full-width header image
+          _buildHeaderImage(post),
+
+          Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Title and favorite button
+                _buildTitleSection(post, isFavorite, postProvider),
+                const SizedBox(height: 16),
+
+                // Meta information (category, date, views)
+                _buildMetaSection(post),
+                const SizedBox(height: 24),
+
+                // Short description
+                if (post.shortDescription.isNotEmpty) ...[
+                  _buildShortDescription(post),
+                  const SizedBox(height: 16),
+                ],
+
+                // Full description
+                if (post.description.isNotEmpty) ...[
+                  _buildFullDescription(post),
+                  const SizedBox(height: 24),
+                ],
+
+                // Action buttons (Get it now directly, Visit website, etc.)
+                _buildActionButtons(post),
+                const SizedBox(height: 36),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildHeaderImage(Post post) {
+    if (post.imageUrl == null || post.imageUrl!.isEmpty) {
       return const SizedBox.shrink();
     }
 
@@ -152,7 +189,7 @@ class _PostDetailsScreenState extends State<PostDetailsScreen> {
     );
   }
 
-  Widget _buildTitleSection(dynamic post, bool isFavorite, PostProvider postProvider) {
+  Widget _buildTitleSection(Post post, bool isFavorite, PostProvider postProvider) {
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -160,8 +197,11 @@ class _PostDetailsScreenState extends State<PostDetailsScreen> {
           child: Text(
             post.title,
             style: Theme.of(context).textTheme.displayMedium?.copyWith(
-              fontWeight: FontWeight.bold,
-            ),
+                  fontWeight: FontWeight.bold,
+                  fontSize: 22,
+                  height: 1.3,
+                  color: Colors.white,
+                ),
           ),
         ),
         const SizedBox(width: 8),
@@ -209,10 +249,11 @@ class _PostDetailsScreenState extends State<PostDetailsScreen> {
     );
   }
 
-  Widget _buildMetaSection(dynamic post) {
-    final publishDate = post.publishedAt?.toString().split(' ')[0] ?? 'Unknown';
-    final postCode = post.code as String? ?? '';
-    
+  Widget _buildMetaSection(Post post) {
+    final publishDate = post.publishedAt?.toString().split(' ')[0] ??
+        post.createdAt.toString().split(' ')[0];
+    final postCode = post.code;
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -259,7 +300,7 @@ class _PostDetailsScreenState extends State<PostDetailsScreen> {
           ],
         ),
         const SizedBox(height: 10),
-        
+
         // Date, views and likes
         Wrap(
           spacing: 16,
@@ -273,8 +314,8 @@ class _PostDetailsScreenState extends State<PostDetailsScreen> {
                 Text(
                   'Published $publishDate',
                   style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: AppColors.textSecondary,
-                  ),
+                        color: AppColors.textSecondary,
+                      ),
                 ),
               ],
             ),
@@ -286,9 +327,9 @@ class _PostDetailsScreenState extends State<PostDetailsScreen> {
                 Text(
                   '${post.viewsCount} views',
                   style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: AppColors.cyan,
-                    fontWeight: FontWeight.w600,
-                  ),
+                        color: AppColors.cyan,
+                        fontWeight: FontWeight.w600,
+                      ),
                 ),
               ],
             ),
@@ -300,9 +341,9 @@ class _PostDetailsScreenState extends State<PostDetailsScreen> {
                 Text(
                   '${post.likesCount} likes',
                   style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: AppColors.error,
-                    fontWeight: FontWeight.w600,
-                  ),
+                        color: AppColors.error,
+                        fontWeight: FontWeight.w600,
+                      ),
                 ),
               ],
             ),
@@ -312,64 +353,71 @@ class _PostDetailsScreenState extends State<PostDetailsScreen> {
     );
   }
 
-  Widget _buildShortDescription(dynamic post) {
+  Widget _buildShortDescription(Post post) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
           'Overview',
           style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-            fontWeight: FontWeight.bold,
-          ),
+                fontWeight: FontWeight.bold,
+                fontSize: 18,
+                color: Colors.white,
+              ),
         ),
         const SizedBox(height: 8),
         Text(
           post.shortDescription,
           style: Theme.of(context).textTheme.titleMedium?.copyWith(
-            height: 1.4,
-          ),
+                height: 1.4,
+                color: Colors.white70,
+              ),
         ),
       ],
     );
   }
 
-  Widget _buildFullDescription(dynamic post) {
+  Widget _buildFullDescription(Post post) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
           'Description',
           style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-            fontWeight: FontWeight.bold,
-          ),
+                fontWeight: FontWeight.bold,
+                fontSize: 18,
+                color: Colors.white,
+              ),
         ),
         const SizedBox(height: 8),
         Text(
           post.description,
           style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-            height: 1.5,
-          ),
+                height: 1.5,
+                color: Colors.white.withValues(alpha: 0.85),
+              ),
         ),
       ],
     );
   }
 
-  Widget _buildActionButtons(dynamic post) {
+  Widget _buildActionButtons(Post post) {
     final buttons = <Widget>[];
 
-    // Get it now button for app posts
+    // Get it now button for app posts (direct 1-tap Google Play Store opening)
     if (post.postType == 'app' && post.playStoreUrl != null && post.playStoreUrl!.isNotEmpty) {
       buttons.add(_buildGetItNowButton(post.playStoreUrl!));
       buttons.add(const SizedBox(height: 12));
     }
 
-    // Visit website button for article/job posts
-    if ((post.postType == 'article' || post.postType == 'job') && 
-        post.externalUrl != null && post.externalUrl!.isNotEmpty) {
+    // Direct button for article/job posts
+    if ((post.postType == 'article' || post.postType == 'job') &&
+        post.externalUrl != null &&
+        post.externalUrl!.isNotEmpty) {
       buttons.add(_buildVisitWebsiteButton(post.externalUrl!, post.postType));
     }
 
-    return buttons.isEmpty 
+    return buttons.isEmpty
         ? const SizedBox.shrink()
         : Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -377,8 +425,10 @@ class _PostDetailsScreenState extends State<PostDetailsScreen> {
               Text(
                 'Actions',
                 style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                  fontWeight: FontWeight.bold,
-                ),
+                      fontWeight: FontWeight.bold,
+                      fontSize: 18,
+                      color: Colors.white,
+                    ),
               ),
               const SizedBox(height: 12),
               ...buttons,
@@ -390,20 +440,12 @@ class _PostDetailsScreenState extends State<PostDetailsScreen> {
     return SizedBox(
       width: double.infinity,
       child: ElevatedButton.icon(
-        onPressed: () async {
-          final success = await UrlLauncherService.launchPlayStoreUrl(
+        onPressed: () {
+          // Direct 1-tap Google Play Store launch without intermediate dialogs or snackbars
+          UrlLauncherService.launchPlayStoreUrl(
             playStoreUrl,
             context,
           );
-          
-          if (success) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(
-                content: Text('Opening Google Play Store...'),
-                duration: Duration(seconds: 2),
-              ),
-            );
-          }
         },
         icon: const Icon(Icons.shop, size: 24),
         label: const Text(
@@ -428,7 +470,7 @@ class _PostDetailsScreenState extends State<PostDetailsScreen> {
   Widget _buildVisitWebsiteButton(String externalUrl, String postType) {
     String label = 'Get it now';
     IconData icon = Icons.download_rounded;
-    
+
     switch (postType) {
       case 'article':
         label = 'Read Full Article';
@@ -442,20 +484,11 @@ class _PostDetailsScreenState extends State<PostDetailsScreen> {
     return SizedBox(
       width: double.infinity,
       child: ElevatedButton.icon(
-        onPressed: () async {
-          final success = await UrlLauncherService.launchExternalUrl(
+        onPressed: () {
+          UrlLauncherService.launchExternalUrl(
             externalUrl,
             context,
           );
-          
-          if (success) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(
-                content: Text('Opening $label...'),
-                duration: const Duration(seconds: 2),
-              ),
-            );
-          }
         },
         icon: Icon(icon, size: 20),
         label: Text(
