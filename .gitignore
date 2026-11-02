@@ -1,0 +1,23 @@
+# Flutter build and dependencies
+app_discovery/build/
+app_discovery/.dart_tool/
+app_discovery/.flutter-plugins-dependencies
+app_discovery/.pub-cache/
+app_discovery/.pub/
+build/
+.dart_tool/
+
+# Gradle & Caches
+.gradle/
+*.class
+*.log
+*.swp
+.DS_Store
+
+# IDE
+.idea/
+*.iml
+.vscode/
+
+# Build artifacts
+*.apk

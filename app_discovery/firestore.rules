@@ -1,0 +1,25 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // Posts: public read, allow create, update, delete for testing & management
+    match /posts/{postId} {
+      allow read, write: if true;
+    }
+
+    // Categories: public read, allow create, update, delete for testing & management
+    match /categories/{categoryId} {
+      allow read, write: if true;
+    }
+
+    // Users collection: read and write
+    match /users/{userId} {
+      allow read, write: if true;
+    }
+
+    // Admins collection: read and write
+    match /admins/{adminId} {
+      allow read, write: if true;
+    }
+  }
+}

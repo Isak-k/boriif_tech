@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "224058604407",
+    "project_id": "borif-tech",
+    "storage_bucket": "borif-tech.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:224058604407:android:8110dd505f2da044267f72",
+        "android_client_info": {
+          "package_name": "com.example.app_discovery"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDAULHqzCQMZ3ESWFO0N1YTaFw1SNgQ6YM"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
