@@ -53,12 +53,19 @@ class _HomeScreenState extends State<HomeScreen> {
     super.dispose();
   }
 
-  List<Post> _filterPosts(List<Post> allPosts) {
+  List<Post> _filterPosts(List<Post> allPosts, CategoryProvider categoryProvider) {
     var result = allPosts;
 
     // Filter by Category if not 'all'
     if (_selectedCategoryId != 'all' && _selectedCategoryId.isNotEmpty) {
-      result = result.where((p) => p.categoryId == _selectedCategoryId).toList();
+      final selectedCat = categoryProvider.categories.where((c) => c.id == _selectedCategoryId).firstOrNull;
+      final queryId = _selectedCategoryId.trim().toLowerCase();
+      final queryName = selectedCat?.name.trim().toLowerCase() ?? '';
+
+      result = result.where((p) {
+        final pCat = p.categoryId.trim().toLowerCase();
+        return pCat == queryId || (queryName.isNotEmpty && pCat == queryName);
+      }).toList();
     }
 
     // Filter by Title or Code
@@ -75,6 +82,165 @@ class _HomeScreenState extends State<HomeScreen> {
     return result;
   }
 
+  void _showLanguageDialog(BuildContext context) {
+    final settings = context.read<SettingsProvider>();
+    final currentLang = settings.language;
+
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: const Color(0xFF131A29),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Row(
+          children: const [
+            Icon(Icons.language, color: AppColors.cyan),
+            SizedBox(width: 10),
+            Text('Language / Afaan', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18, color: Colors.white)),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: SettingsProvider.getAvailableLanguages().map((lang) {
+            final isSelected = currentLang == lang['code'];
+            return Container(
+              margin: const EdgeInsets.symmetric(vertical: 4),
+              decoration: BoxDecoration(
+                color: isSelected ? AppColors.cyan.withValues(alpha: 0.15) : Colors.transparent,
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(
+                  color: isSelected ? AppColors.cyan : Colors.white12,
+                ),
+              ),
+              child: ListTile(
+                title: Text(
+                  lang['name'] ?? '',
+                  style: TextStyle(
+                    color: isSelected ? AppColors.cyan : Colors.white,
+                    fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                  ),
+                ),
+                trailing: isSelected ? const Icon(Icons.check_circle, color: AppColors.cyan) : null,
+                onTap: () {
+                  settings.setLanguage(lang['code']!);
+                  Navigator.pop(ctx);
+                },
+              ),
+            );
+          }).toList(),
+        ),
+      ),
+    );
+  }
+
+  void _showNotificationsDialog(BuildContext context) {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: const Color(0xFF111726),
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (ctx) => Padding(
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Row(
+                  children: const [
+                    Icon(Icons.notifications_active, color: AppColors.cyan, size: 22),
+                    SizedBox(width: 10),
+                    Text(
+                      'Notifications',
+                      style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.white),
+                    ),
+                  ],
+                ),
+                IconButton(
+                  icon: const Icon(Icons.close, color: Colors.white70),
+                  onPressed: () => Navigator.pop(ctx),
+                ),
+              ],
+            ),
+            const Divider(color: Colors.white12),
+            const SizedBox(height: 8),
+            _buildNotificationItem(
+              icon: Icons.offline_pin,
+              iconColor: AppColors.cyan,
+              title: 'Offline Sync Active',
+              message: 'All published posts & categories are automatically saved to your device for offline reading.',
+              time: 'Active',
+            ),
+            const SizedBox(height: 12),
+            _buildNotificationItem(
+              icon: Icons.cloud_done,
+              iconColor: Colors.green,
+              title: 'Cloud Database Ready',
+              message: 'Connected to Boriif Tech services. New content is synchronized in real time.',
+              time: 'Online',
+            ),
+            const SizedBox(height: 16),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildNotificationItem({
+    required IconData icon,
+    required Color iconColor,
+    required String title,
+    required String message,
+    required String time,
+  }) {
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: const Color(0xFF182236),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: Colors.white10),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          CircleAvatar(
+            radius: 18,
+            backgroundColor: iconColor.withValues(alpha: 0.2),
+            child: Icon(icon, color: iconColor, size: 20),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(
+                      title,
+                      style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.white, fontSize: 14),
+                    ),
+                    Text(
+                      time,
+                      style: const TextStyle(color: Colors.white54, fontSize: 11),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  message,
+                  style: const TextStyle(color: Colors.white70, fontSize: 12),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Consumer<SettingsProvider>(
@@ -85,15 +251,8 @@ class _HomeScreenState extends State<HomeScreen> {
           backgroundColor: Colors.transparent,
           appBar: AppBarWidget(
             title: AppStrings.get('home', 'recent', lang),
-            onNotificationPressed: () {
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(
-                  content: Text(
-                    AppStrings.get('common', 'loading', lang),
-                  ),
-                ),
-              );
-            },
+            onLanguagePressed: () => _showLanguageDialog(context),
+            onNotificationPressed: () => _showNotificationsDialog(context),
             onProfilePressed: () {
               if (widget.onTabSelect != null) {
                 widget.onTabSelect!(3);
@@ -123,7 +282,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 );
               }
 
-              final displayedPosts = _filterPosts(postProvider.posts);
+              final displayedPosts = _filterPosts(postProvider.posts, categoryProvider);
 
               return RefreshIndicator(
                 onRefresh: () async {
@@ -230,23 +389,31 @@ class _HomeScreenState extends State<HomeScreen> {
                         delegate: SliverChildBuilderDelegate(
                           (context, index) {
                             final post = displayedPosts[index];
-                            return PostCardWidget(
-                              post: post,
-                              isFavorite: postProvider.isFavorite(post.id),
-                              onTap: () {
-                                Navigator.pushNamed(
-                                  context,
-                                  AppRouter.postDetails,
-                                  arguments: post.id,
-                                );
-                              },
-                              onFavoritePressed: () async {
-                                if (postProvider.isFavorite(post.id)) {
-                                  await postProvider.removeFromFavorites(post.id);
-                                } else {
-                                  await postProvider.addToFavorites(post);
-                                }
-                              },
+                            final isFav = postProvider.isFavorite(post.id);
+
+                            return Padding(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 16,
+                                vertical: 6,
+                              ),
+                              child: PostCardWidget(
+                                post: post,
+                                isFavorite: isFav,
+                                onFavoritePressed: () async {
+                                  if (isFav) {
+                                    await postProvider.removeFromFavorites(post.id);
+                                  } else {
+                                    await postProvider.addToFavorites(post);
+                                  }
+                                },
+                                onTap: () {
+                                  Navigator.pushNamed(
+                                    context,
+                                    AppRouter.postDetails,
+                                    arguments: post.id,
+                                  );
+                                },
+                              ),
                             );
                           },
                           childCount: displayedPosts.length,
@@ -254,7 +421,7 @@ class _HomeScreenState extends State<HomeScreen> {
                       ),
 
                     const SliverToBoxAdapter(
-                      child: SizedBox(height: 24),
+                      child: SizedBox(height: 80),
                     ),
                   ],
                 ),
@@ -279,8 +446,8 @@ class _HomeScreenState extends State<HomeScreen> {
   Widget _buildSearchBar() {
     return Container(
       decoration: BoxDecoration(
-        color: const Color(0xFF0F1522),
-        borderRadius: BorderRadius.circular(14),
+        color: const Color(0xFF131826),
+        borderRadius: BorderRadius.circular(12),
         border: Border.all(
           color: _searchQuery.isNotEmpty
               ? AppColors.cyan
@@ -289,9 +456,9 @@ class _HomeScreenState extends State<HomeScreen> {
         ),
         boxShadow: [
           BoxShadow(
-            color: AppColors.cyan.withValues(alpha: _searchQuery.isNotEmpty ? 0.12 : 0.05),
-            blurRadius: 10,
-            offset: const Offset(0, 3),
+            color: Colors.black.withValues(alpha: 0.3),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
           ),
         ],
       ),
@@ -299,19 +466,15 @@ class _HomeScreenState extends State<HomeScreen> {
         controller: _searchController,
         style: const TextStyle(color: Colors.white, fontSize: 14),
         decoration: InputDecoration(
-          hintText: 'Search by title or code (e.g. #APP-01)...',
+          hintText: 'Search by title or #code (e.g. #APP-01)...',
           hintStyle: TextStyle(
             color: AppColors.textSecondary.withValues(alpha: 0.7),
             fontSize: 13,
           ),
-          prefixIcon: const Icon(
-            Icons.search_rounded,
-            color: AppColors.cyan,
-            size: 22,
-          ),
+          prefixIcon: const Icon(Icons.search, color: AppColors.cyan, size: 20),
           suffixIcon: _searchQuery.isNotEmpty
               ? IconButton(
-                  icon: const Icon(Icons.clear_rounded, color: Colors.white70, size: 20),
+                  icon: const Icon(Icons.clear, color: AppColors.textSecondary, size: 18),
                   onPressed: () {
                     _searchController.clear();
                     setState(() {

@@ -6,7 +6,7 @@ import '../core/routing/app_router.dart';
 import 'cached_app_image.dart';
 
 /// Horizontal widget displaying recent posts that scrolls horizontally continuously.
-/// User can freely tap to open a post, or swipe manually, with auto-scroll pausing on touch.
+/// User can freely tap to open a post, or swipe manually, with auto-scroll resuming smoothly.
 class RecentPostsMarqueeWidget extends StatefulWidget {
   final List<Post> posts;
 
@@ -44,18 +44,20 @@ class _RecentPostsMarqueeWidgetState extends State<RecentPostsMarqueeWidget> {
 
   void _startAutoScroll() {
     _autoScrollTimer?.cancel();
-    // Continuous subtle scrolling: 1 pixel every 35 milliseconds (~28fps continuous marquee)
-    _autoScrollTimer = Timer.periodic(const Duration(milliseconds: 35), (timer) {
+    // Continuous smooth marquee movement (~33fps)
+    _autoScrollTimer = Timer.periodic(const Duration(milliseconds: 30), (timer) {
       if (!_scrollController.hasClients || _isUserInteracting) return;
+      if (!_scrollController.position.hasContentDimensions) return;
 
       final maxScroll = _scrollController.position.maxScrollExtent;
       final currentScroll = _scrollController.offset;
 
-      if (currentScroll >= maxScroll - 1) {
-        // Wrap smoothly back to start for continuous looping
+      if (maxScroll <= 0) return;
+
+      if (currentScroll >= maxScroll - 2) {
         _scrollController.jumpTo(0);
       } else {
-        _scrollController.jumpTo(currentScroll + 1.0);
+        _scrollController.jumpTo(currentScroll + 0.9);
       }
     });
   }
@@ -67,8 +69,7 @@ class _RecentPostsMarqueeWidgetState extends State<RecentPostsMarqueeWidget> {
 
   void _onUserInteractionEnd() {
     _resumeTimer?.cancel();
-    // Resume auto-scrolling 2.5 seconds after user finishes touching
-    _resumeTimer = Timer(const Duration(milliseconds: 2500), () {
+    _resumeTimer = Timer(const Duration(milliseconds: 2000), () {
       if (mounted) {
         setState(() {
           _isUserInteracting = false;
@@ -83,11 +84,10 @@ class _RecentPostsMarqueeWidgetState extends State<RecentPostsMarqueeWidget> {
       return const SizedBox.shrink();
     }
 
-    // Take up to 10 recent posts
     final recentPosts = widget.posts.take(10).toList();
-    // Duplicate list items to create a seamless infinite loop feeling
-    final displayList = recentPosts.length > 2
-        ? [...recentPosts, ...recentPosts, ...recentPosts]
+    // Seamless infinite continuous loop
+    final displayList = recentPosts.length > 1
+        ? [...recentPosts, ...recentPosts, ...recentPosts, ...recentPosts]
         : recentPosts;
 
     return Column(
@@ -125,20 +125,20 @@ class _RecentPostsMarqueeWidgetState extends State<RecentPostsMarqueeWidget> {
               ),
               const Spacer(),
               Text(
-                'Continuous feed',
+                'Continuous Feed',
                 style: TextStyle(
-                  color: AppColors.textSecondary.withValues(alpha: 0.7),
+                  color: AppColors.cyan.withValues(alpha: 0.7),
                   fontSize: 11,
-                  fontStyle: FontStyle.italic,
+                  fontWeight: FontWeight.w500,
                 ),
               ),
             ],
           ),
         ),
 
-        // Continuous horizontal list
+        // Continuous horizontal list with full visibility
         SizedBox(
-          height: 148,
+          height: 182,
           child: NotificationListener<ScrollNotification>(
             onNotification: (notification) {
               if (notification is ScrollStartNotification) {
@@ -168,18 +168,18 @@ class _RecentPostsMarqueeWidgetState extends State<RecentPostsMarqueeWidget> {
 
   Widget _buildRecentCard(BuildContext context, Post post) {
     return Container(
-      width: 210,
-      margin: const EdgeInsets.symmetric(horizontal: 5, vertical: 4),
+      width: 220,
+      margin: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
       decoration: BoxDecoration(
         color: const Color(0xFF101622),
         borderRadius: BorderRadius.circular(12),
         border: Border.all(
-          color: AppColors.cyan.withValues(alpha: 0.22),
+          color: AppColors.cyan.withValues(alpha: 0.25),
           width: 1,
         ),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha: 0.3),
+            color: Colors.black.withValues(alpha: 0.35),
             blurRadius: 6,
             offset: const Offset(0, 3),
           ),
@@ -203,7 +203,7 @@ class _RecentPostsMarqueeWidgetState extends State<RecentPostsMarqueeWidget> {
               Stack(
                 children: [
                   Container(
-                    height: 78,
+                    height: 100,
                     width: double.infinity,
                     decoration: const BoxDecoration(
                       borderRadius: BorderRadius.vertical(top: Radius.circular(11)),
@@ -211,7 +211,7 @@ class _RecentPostsMarqueeWidgetState extends State<RecentPostsMarqueeWidget> {
                     child: CachedAppImage(
                       imageUrl: post.imageUrl,
                       width: double.infinity,
-                      height: 78,
+                      height: 100,
                       fit: BoxFit.cover,
                       borderRadius: const BorderRadius.vertical(top: Radius.circular(11)),
                       placeholderIcon: Icons.image_outlined,
@@ -221,15 +221,15 @@ class _RecentPostsMarqueeWidgetState extends State<RecentPostsMarqueeWidget> {
                   // Post Code Badge (Top-left)
                   if (post.code.isNotEmpty)
                     Positioned(
-                      top: 5,
-                      left: 5,
+                      top: 6,
+                      left: 6,
                       child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2.5),
                         decoration: BoxDecoration(
                           color: const Color(0xDD000000),
                           borderRadius: BorderRadius.circular(4),
                           border: Border.all(
-                            color: AppColors.cyan.withValues(alpha: 0.8),
+                            color: AppColors.cyan,
                             width: 0.8,
                           ),
                         ),
@@ -243,34 +243,13 @@ class _RecentPostsMarqueeWidgetState extends State<RecentPostsMarqueeWidget> {
                         ),
                       ),
                     ),
-
-                  // Post Type Badge (Top-right)
-                  Positioned(
-                    top: 5,
-                    right: 5,
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
-                      decoration: BoxDecoration(
-                        color: _getTypeColor(post.postType).withValues(alpha: 0.85),
-                        borderRadius: BorderRadius.circular(4),
-                      ),
-                      child: Text(
-                        post.postType.toUpperCase(),
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 8,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                    ),
-                  ),
                 ],
               ),
 
               // Title and metrics
               Expanded(
                 child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+                  padding: const EdgeInsets.fromLTRB(10, 8, 10, 8),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -281,7 +260,7 @@ class _RecentPostsMarqueeWidgetState extends State<RecentPostsMarqueeWidget> {
                         overflow: TextOverflow.ellipsis,
                         style: const TextStyle(
                           color: Colors.white,
-                          fontSize: 12,
+                          fontSize: 13,
                           fontWeight: FontWeight.bold,
                         ),
                       ),
@@ -292,15 +271,15 @@ class _RecentPostsMarqueeWidgetState extends State<RecentPostsMarqueeWidget> {
                             children: [
                               const Icon(
                                 Icons.visibility_outlined,
-                                size: 12,
+                                size: 13,
                                 color: AppColors.cyan,
                               ),
-                              const SizedBox(width: 3),
+                              const SizedBox(width: 4),
                               Text(
                                 '${post.viewsCount}',
                                 style: const TextStyle(
                                   color: AppColors.cyan,
-                                  fontSize: 10,
+                                  fontSize: 11,
                                   fontWeight: FontWeight.w600,
                                 ),
                               ),
@@ -310,15 +289,15 @@ class _RecentPostsMarqueeWidgetState extends State<RecentPostsMarqueeWidget> {
                             children: [
                               const Icon(
                                 Icons.favorite,
-                                size: 12,
+                                size: 13,
                                 color: AppColors.error,
                               ),
-                              const SizedBox(width: 3),
+                              const SizedBox(width: 4),
                               Text(
                                 '${post.likesCount}',
                                 style: const TextStyle(
                                   color: AppColors.error,
-                                  fontSize: 10,
+                                  fontSize: 11,
                                   fontWeight: FontWeight.w600,
                                 ),
                               ),
@@ -335,18 +314,5 @@ class _RecentPostsMarqueeWidgetState extends State<RecentPostsMarqueeWidget> {
         ),
       ),
     );
-  }
-
-  Color _getTypeColor(String type) {
-    switch (type.toLowerCase()) {
-      case 'app':
-        return AppColors.cyan;
-      case 'article':
-        return AppColors.purple;
-      case 'job':
-        return AppColors.accent;
-      default:
-        return AppColors.textSecondary;
-    }
   }
 }

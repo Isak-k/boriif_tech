@@ -76,7 +76,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         ),
                         child: const Center(
                           child: Text(
-                            'A',
+                            'B',
                             style: TextStyle(
                               color: AppColors.cyan,
                               fontSize: 36,
@@ -234,6 +234,15 @@ class _ProfileScreenState extends State<ProfileScreen> {
                               _showErrorSnackbar(context, 'Could not open app page');
                             }
                           }
+                        },
+                      ),
+                      _buildSettingsTile(
+                        context,
+                        icon: Icons.privacy_tip_outlined,
+                        title: 'Privacy Policy',
+                        subtitle: 'Learn how we protect and manage your data',
+                        onTap: () {
+                          _showPrivacyPolicyDialog(context);
                         },
                       ),
                     ],
@@ -486,6 +495,94 @@ class _ProfileScreenState extends State<ProfileScreen> {
       SnackBar(
         content: Text(message),
         backgroundColor: AppColors.success,
+      ),
+    );
+  }
+
+  void _showPrivacyPolicyDialog(BuildContext context) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: const Color(0xFF111728),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Row(
+          children: const [
+            Icon(Icons.privacy_tip, color: AppColors.cyan, size: 24),
+            SizedBox(width: 10),
+            Text('Privacy Policy', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+          ],
+        ),
+        content: SizedBox(
+          width: double.maxFinite,
+          child: SingleChildScrollView(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Text(
+                  'Boriif Tech Platform',
+                  style: TextStyle(color: AppColors.cyan, fontWeight: FontWeight.bold, fontSize: 15),
+                ),
+                const SizedBox(height: 6),
+                const Text(
+                  'Last updated: November 2026',
+                  style: TextStyle(color: Colors.white54, fontSize: 12),
+                ),
+                const SizedBox(height: 14),
+                _buildPolicySection(
+                  '1. Commitment to Privacy',
+                  'At Boriif Tech, we deeply respect your privacy. We do not sell, rent, or trade your personal information to third parties.',
+                ),
+                _buildPolicySection(
+                  '2. Local Offline Caching',
+                  'To provide an uninterrupted browsing experience without continuous network access, post metadata, categories, and image assets are stored locally on your device storage. You can clear this cached data anytime from the Profile settings.',
+                ),
+                _buildPolicySection(
+                  '3. Firebase & Cloud Infrastructure',
+                  'We utilize Google Firebase Firestore and Firebase Authentication to deliver secure data persistence and synchronization. Telemetry and view counts are processed securely to ensure genuine real-time metrics.',
+                ),
+                _buildPolicySection(
+                  '4. Cloudinary Image Storage',
+                  'All post imagery is hosted and optimized on Cloudinary high-speed content delivery networks for secure and instant retrieval.',
+                ),
+                _buildPolicySection(
+                  '5. Contact Information',
+                  'If you have questions regarding this Privacy Policy or your data, please contact the administrator at support@boriiftech.com.',
+                ),
+              ],
+            ),
+          ),
+        ),
+        actions: [
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.cyan,
+              foregroundColor: Colors.black,
+            ),
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('I Understand', style: TextStyle(fontWeight: FontWeight.bold)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildPolicySection(String heading, String body) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            heading,
+            style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w600, fontSize: 13),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            body,
+            style: const TextStyle(color: Colors.white70, fontSize: 12, height: 1.4),
+          ),
+        ],
       ),
     );
   }

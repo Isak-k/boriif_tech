@@ -4,6 +4,7 @@ import 'core/theme/app_theme.dart';
 import 'core/routing/app_router.dart';
 import 'services/firebase_service.dart';
 import 'services/cloudinary_service.dart';
+import 'services/admin_service.dart';
 import 'providers/auth_provider.dart';
 import 'providers/post_provider.dart';
 import 'providers/category_provider.dart';
@@ -53,6 +54,7 @@ void main() async {
   await FirebaseService.initialize();
   await CloudinaryService.loadConfig();
   await AdminConstants.loadPersistedAdmins();
+  await AdminService.hydrateFromDisk();
 
   // Initialize settings provider before building widget tree
   final settingsProvider = SettingsProvider();

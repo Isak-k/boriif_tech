@@ -58,26 +58,31 @@ class PostCardWidget extends StatelessWidget {
   }
 
   Widget _buildImageSection() {
+    if (post.imageUrl == null || post.imageUrl!.isEmpty) {
+      return const SizedBox.shrink();
+    }
+
     return Container(
-      height: 130,
+      constraints: const BoxConstraints(minHeight: 140, maxHeight: 220),
       width: double.infinity,
       decoration: const BoxDecoration(
-        color: AppColors.elevatedSurface,
+        color: Color(0xFF0F1522),
         borderRadius: BorderRadius.only(
           topLeft: Radius.circular(12),
           topRight: Radius.circular(12),
         ),
       ),
-      child: CachedAppImage(
-        imageUrl: post.imageUrl,
-        width: double.infinity,
-        height: 130,
-        fit: BoxFit.cover,
+      child: ClipRRect(
         borderRadius: const BorderRadius.only(
           topLeft: Radius.circular(12),
           topRight: Radius.circular(12),
         ),
-        placeholderIcon: _getTypeIcon(post.postType),
+        child: CachedAppImage(
+          imageUrl: post.imageUrl,
+          width: double.infinity,
+          fit: BoxFit.cover,
+          placeholderIcon: _getTypeIcon(post.postType),
+        ),
       ),
     );
   }

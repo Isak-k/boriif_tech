@@ -25,7 +25,7 @@ class OfflineCacheService {
       await prefs.setString(_postsCacheKey, jsonEncode(postListJson));
       await prefs.setInt(_lastSyncTimeKey, DateTime.now().millisecondsSinceEpoch);
     } catch (e) {
-      // ignore or log
+      print('Notice saving cached posts: $e');
     }
   }
 
@@ -40,7 +40,66 @@ class OfflineCacheService {
       final List<dynamic> decoded = jsonDecode(jsonString);
       return decoded.map((item) => Post.fromMap(item as Map<String, dynamic>)).toList();
     } catch (e) {
+      print('Notice reading cached posts: $e');
       return [];
+    }
+  }
+
+  /// Insert or update a post in local persistent storage
+  static Future<void> upsertPost(Post post) async {
+    try {
+      final posts = await getCachedPosts();
+      final index = posts.indexWhere((p) => p.id == post.id);
+      if (index != -1) {
+        posts[index] = post;
+      } else {
+        posts.insert(0, post);
+      }
+      await savePosts(posts);
+    } catch (e) {
+      print('Notice upserting cached post: $e');
+    }
+  }
+
+  /// Delete a post from local persistent storage
+  static Future<void> deletePost(String postId) async {
+    try {
+      final posts = await getCachedPosts();
+      posts.removeWhere((p) => p.id == postId);
+      await savePosts(posts);
+    } catch (e) {
+      print('Notice deleting cached post: $e');
+    }
+  }
+
+  /// Update view count for a specific post in local storage
+  static Future<void> updatePostViews(String postId, int newViews) async {
+    try {
+      final posts = await getCachedPosts();
+      final index = posts.indexWhere((p) => p.id == postId);
+      if (index != -1) {
+        posts[index] = posts[index].copyWith(viewsCount: newViews);
+        await savePosts(posts);
+      }
+    } catch (e) {
+      print('Notice updating post views in cache: $e');
+    }
+  }
+
+  /// Update likes count and favorite status in local storage
+  static Future<void> updatePostLikes(String postId, int newLikes, bool isFavorite) async {
+    try {
+      final posts = await getCachedPosts();
+      final index = posts.indexWhere((p) => p.id == postId);
+      if (index != -1) {
+        posts[index] = posts[index].copyWith(
+          likesCount: newLikes,
+          isFavorite: isFavorite,
+        );
+        await savePosts(posts);
+      }
+    } catch (e) {
+      print('Notice updating post likes in cache: $e');
     }
   }
 
@@ -51,7 +110,7 @@ class OfflineCacheService {
       final catListJson = categories.map((c) => c.toMap()).toList();
       await prefs.setString(_categoriesCacheKey, jsonEncode(catListJson));
     } catch (e) {
-      // ignore
+      print('Notice saving cached categories: $e');
     }
   }
 
@@ -66,7 +125,35 @@ class OfflineCacheService {
       final List<dynamic> decoded = jsonDecode(jsonString);
       return decoded.map((item) => Category.fromMap(item as Map<String, dynamic>)).toList();
     } catch (e) {
+      print('Notice reading cached categories: $e');
       return [];
+    }
+  }
+
+  /// Insert or update a category in local persistent storage
+  static Future<void> upsertCategory(Category category) async {
+    try {
+      final categories = await getCachedCategories();
+      final index = categories.indexWhere((c) => c.id == category.id);
+      if (index != -1) {
+        categories[index] = category;
+      } else {
+        categories.insert(0, category);
+      }
+      await saveCategories(categories);
+    } catch (e) {
+      print('Notice upserting cached category: $e');
+    }
+  }
+
+  /// Delete a category from local persistent storage
+  static Future<void> deleteCategory(String categoryId) async {
+    try {
+      final categories = await getCachedCategories();
+      categories.removeWhere((c) => c.id == categoryId);
+      await saveCategories(categories);
+    } catch (e) {
+      print('Notice deleting cached category: $e');
     }
   }
 

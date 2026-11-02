@@ -30,7 +30,7 @@ class AppBarWidget extends StatelessWidget implements PreferredSizeWidget {
               ),
               child: const Center(
                 child: Text(
-                  'A',
+                  'B',
                   style: TextStyle(
                     color: AppColors.cyan,
                     fontSize: 20,

@@ -18,27 +18,41 @@ class PostService {
   /// Collection name
   static const String _postsCollection = 'posts';
 
-  /// Fetch all published posts (paginated, resilient merge with automatic offline caching)
+  /// Fetch all published posts (resilient merge with automatic offline caching)
   Future<List<Post>> fetchPublishedPosts({
     int limit = 50,
     DocumentSnapshot? startAfter,
   }) async {
+    await AdminService.hydrateFromDisk();
+
     try {
       final firestore = _firestore;
       if (firestore == null) {
         final cached = await OfflineCacheService.getCachedPosts();
-        if (cached.isNotEmpty) return cached;
+        if (cached.isNotEmpty) {
+          return cached.where((p) => p.isPublished).toList();
+        }
         return AdminService.localPosts.where((p) => p.isPublished).toList();
       }
 
-      final snapshot = await firestore
-          .collection(_postsCollection)
-          .where('isPublished', isEqualTo: true)
-          .limit(limit)
-          .get();
+      QuerySnapshot<Map<String, dynamic>> snapshot;
+      try {
+        snapshot = await firestore
+            .collection(_postsCollection)
+            .where('isPublished', isEqualTo: true)
+            .limit(limit)
+            .get();
+      } catch (whereErr) {
+        // Fallback without where clause if index or rules issue
+        snapshot = await firestore
+            .collection(_postsCollection)
+            .limit(limit)
+            .get();
+      }
 
       final remotePosts = snapshot.docs
           .map((doc) => Post.fromFirestore(doc))
+          .where((p) => p.isPublished)
           .toList();
 
       final combined = <Post>[...remotePosts];
@@ -48,17 +62,27 @@ class PostService {
         }
       }
 
-      // Sort newest first by publishedAt or createdAt
+      // Also check cached disk posts
+      final cached = await OfflineCacheService.getCachedPosts();
+      for (final c in cached) {
+        if (c.isPublished && !combined.any((p) => p.id == c.id)) {
+          combined.add(c);
+        }
+      }
+
+      // Sort newest first
       combined.sort((a, b) => (b.publishedAt ?? b.createdAt).compareTo(a.publishedAt ?? a.createdAt));
 
-      // Cache locally on device for offline use
+      // Cache locally on device disk for offline use
       await OfflineCacheService.savePosts(combined);
 
       return combined;
     } catch (e) {
       print('Notice fetching published posts from Firestore ($e). Loading cached posts.');
       final cached = await OfflineCacheService.getCachedPosts();
-      if (cached.isNotEmpty) return cached;
+      if (cached.isNotEmpty) {
+        return cached.where((p) => p.isPublished).toList();
+      }
 
       final local = AdminService.localPosts.where((p) => p.isPublished).toList();
       local.sort((a, b) => (b.publishedAt ?? b.createdAt).compareTo(a.publishedAt ?? a.createdAt));
@@ -68,14 +92,15 @@ class PostService {
 
   /// Listen to published posts in real time
   Stream<List<Post>> streamPublishedPosts({int limit = 50}) {
+    AdminService.hydrateFromDisk();
+
     try {
       final firestore = _firestore;
       if (firestore == null) {
-        return Stream.fromFuture(OfflineCacheService.getCachedPosts()).asyncMap((cached) {
-          if (cached.isNotEmpty) return cached;
-          final local = AdminService.localPosts.where((p) => p.isPublished).toList();
-          local.sort((a, b) => (b.publishedAt ?? b.createdAt).compareTo(a.publishedAt ?? a.createdAt));
-          return local;
+        return Stream.fromFuture(OfflineCacheService.getCachedPosts()).map((cached) {
+          final list = cached.where((p) => p.isPublished).toList();
+          if (list.isNotEmpty) return list;
+          return AdminService.localPosts.where((p) => p.isPublished).toList();
         });
       }
 
@@ -96,99 +121,74 @@ class PostService {
               }
             }
 
+            final cached = await OfflineCacheService.getCachedPosts();
+            for (final c in cached) {
+              if (c.isPublished && !combined.any((p) => p.id == c.id)) {
+                combined.add(c);
+              }
+            }
+
             combined.sort((a, b) => (b.publishedAt ?? b.createdAt).compareTo(a.publishedAt ?? a.createdAt));
-            // Automatically save to local offline cache
             await OfflineCacheService.savePosts(combined);
             return combined;
           })
           .handleError((error) async {
             print('Notice streaming published posts: $error');
             final cached = await OfflineCacheService.getCachedPosts();
-            if (cached.isNotEmpty) return cached;
-            final local = AdminService.localPosts.where((p) => p.isPublished).toList();
-            local.sort((a, b) => (b.publishedAt ?? b.createdAt).compareTo(a.publishedAt ?? a.createdAt));
-            return local;
+            if (cached.isNotEmpty) return cached.where((p) => p.isPublished).toList();
+            return AdminService.localPosts.where((p) => p.isPublished).toList();
           });
     } catch (e) {
       print('Notice streaming published posts: $e');
-      final local = AdminService.localPosts.where((p) => p.isPublished).toList();
-      local.sort((a, b) => (b.publishedAt ?? b.createdAt).compareTo(a.publishedAt ?? a.createdAt));
-      return Stream.value(local);
+      return Stream.value(AdminService.localPosts.where((p) => p.isPublished).toList());
     }
   }
 
   /// Fetch posts by category (supports 'all' for all categories)
   Future<List<Post>> fetchPostsByCategory(String categoryId, {int limit = 50}) async {
+    final allPosts = await fetchPublishedPosts(limit: limit);
     if (categoryId == 'all' || categoryId.isEmpty) {
-      return fetchPublishedPosts(limit: limit);
+      return allPosts;
     }
 
-    try {
-      final firestore = _firestore;
-      if (firestore == null) {
-        final cached = await OfflineCacheService.getCachedPosts();
-        if (cached.isNotEmpty) {
-          return cached.where((p) => p.categoryId == categoryId).toList();
-        }
-        final local = AdminService.localPosts
-            .where((p) => p.categoryId == categoryId && p.isPublished)
-            .toList();
-        local.sort((a, b) => (b.publishedAt ?? b.createdAt).compareTo(a.publishedAt ?? a.createdAt));
-        return local;
-      }
+    final query = categoryId.trim().toLowerCase();
+    final categories = await OfflineCacheService.getCachedCategories();
+    final matchedCat = categories.where((c) => c.id.toLowerCase() == query || c.name.toLowerCase() == query).firstOrNull;
+    final matchedName = matchedCat?.name.toLowerCase() ?? '';
 
-      final snapshot = await firestore
-          .collection(_postsCollection)
-          .where('categoryId', isEqualTo: categoryId)
-          .where('isPublished', isEqualTo: true)
-          .limit(limit)
-          .get();
-
-      final remotePosts = snapshot.docs
-          .map((doc) => Post.fromFirestore(doc))
-          .toList();
-
-      final combined = <Post>[...remotePosts];
-      for (final local in AdminService.localPosts) {
-        if (local.categoryId == categoryId && local.isPublished && !combined.any((p) => p.id == local.id)) {
-          combined.add(local);
-        }
-      }
-
-      combined.sort((a, b) => (b.publishedAt ?? b.createdAt).compareTo(a.publishedAt ?? a.createdAt));
-      return combined;
-    } catch (e) {
-      print('Notice fetching posts by category ($e). Checking offline cache.');
-      final cached = await OfflineCacheService.getCachedPosts();
-      if (cached.isNotEmpty) {
-        return cached.where((p) => p.categoryId == categoryId).toList();
-      }
-      final local = AdminService.localPosts
-          .where((p) => p.categoryId == categoryId && p.isPublished)
-          .toList();
-      local.sort((a, b) => (b.publishedAt ?? b.createdAt).compareTo(a.publishedAt ?? a.createdAt));
-      return local;
-    }
+    return allPosts.where((p) {
+      final pCat = p.categoryId.trim().toLowerCase();
+      if (pCat == query) return true;
+      if (matchedName.isNotEmpty && pCat == matchedName) return true;
+      return false;
+    }).toList();
   }
 
   /// Fetch a single post by ID
   Future<Post?> fetchPostById(String postId) async {
+    await AdminService.hydrateFromDisk();
+
     try {
-      // Check local cache first
+      // Check local memory cache first
       final local = AdminService.localPosts.where((p) => p.id == postId).firstOrNull;
       if (local != null) return local;
+
+      // Check offline disk cached posts
+      final cached = await OfflineCacheService.getCachedPosts();
+      final cachedPost = cached.where((p) => p.id == postId).firstOrNull;
+      if (cachedPost != null) return cachedPost;
 
       final firestore = _firestore;
       if (firestore != null) {
         final doc = await firestore.collection(_postsCollection).doc(postId).get();
         if (doc.exists) {
-          return Post.fromFirestore(doc);
+          final post = Post.fromFirestore(doc);
+          await OfflineCacheService.upsertPost(post);
+          return post;
         }
       }
 
-      // Check offline cached posts
-      final cached = await OfflineCacheService.getCachedPosts();
-      return cached.where((p) => p.id == postId).firstOrNull;
+      return null;
     } catch (e) {
       print('Notice fetching post: $e');
       final cached = await OfflineCacheService.getCachedPosts();
@@ -199,48 +199,8 @@ class PostService {
 
   /// Fetch all posts by a specific post type (app, article, job)
   Future<List<Post>> fetchPostsByType(String postType, {int limit = 50}) async {
-    try {
-      final firestore = _firestore;
-      if (firestore == null) {
-        final cached = await OfflineCacheService.getCachedPosts();
-        if (cached.isNotEmpty) {
-          return cached.where((p) => p.postType == postType).toList();
-        }
-        return AdminService.localPosts
-            .where((p) => p.postType == postType && p.isPublished)
-            .toList();
-      }
-
-      final snapshot = await firestore
-          .collection(_postsCollection)
-          .where('postType', isEqualTo: postType)
-          .where('isPublished', isEqualTo: true)
-          .limit(limit)
-          .get();
-
-      final remotePosts = snapshot.docs
-          .map((doc) => Post.fromFirestore(doc))
-          .toList();
-
-      final combined = <Post>[...remotePosts];
-      for (final local in AdminService.localPosts) {
-        if (local.postType == postType && local.isPublished && !combined.any((p) => p.id == local.id)) {
-          combined.add(local);
-        }
-      }
-
-      combined.sort((a, b) => (b.publishedAt ?? b.createdAt).compareTo(a.publishedAt ?? a.createdAt));
-      return combined;
-    } catch (e) {
-      print('Notice fetching posts by type: $e');
-      final cached = await OfflineCacheService.getCachedPosts();
-      if (cached.isNotEmpty) {
-        return cached.where((p) => p.postType == postType).toList();
-      }
-      return AdminService.localPosts
-          .where((p) => p.postType == postType && p.isPublished)
-          .toList();
-    }
+    final allPosts = await fetchPublishedPosts(limit: limit);
+    return allPosts.where((p) => p.postType.toLowerCase() == postType.toLowerCase()).toList();
   }
 
   /// Increment view count for a post in Firestore, local cache, and offline storage
@@ -248,25 +208,28 @@ class PostService {
     try {
       final firestore = _firestore;
       if (firestore != null) {
-        await firestore.collection(_postsCollection).doc(postId).update({
-          'viewsCount': FieldValue.increment(1),
-        });
+        try {
+          await firestore.collection(_postsCollection).doc(postId).update({
+            'viewsCount': FieldValue.increment(1),
+          });
+        } catch (_) {}
       }
 
-      // Update local posts cache
+      // Update local memory
       final idx = AdminService.localPosts.indexWhere((p) => p.id == postId);
       if (idx != -1) {
+        final newViews = AdminService.localPosts[idx].viewsCount + 1;
         AdminService.localPosts[idx] = AdminService.localPosts[idx].copyWith(
-          viewsCount: AdminService.localPosts[idx].viewsCount + 1,
+          viewsCount: newViews,
         );
-      }
-
-      // Update offline cache
-      final cached = await OfflineCacheService.getCachedPosts();
-      final cIdx = cached.indexWhere((p) => p.id == postId);
-      if (cIdx != -1) {
-        cached[cIdx] = cached[cIdx].copyWith(viewsCount: cached[cIdx].viewsCount + 1);
-        await OfflineCacheService.savePosts(cached);
+        await OfflineCacheService.updatePostViews(postId, newViews);
+      } else {
+        final cached = await OfflineCacheService.getCachedPosts();
+        final cIdx = cached.indexWhere((p) => p.id == postId);
+        if (cIdx != -1) {
+          final newViews = cached[cIdx].viewsCount + 1;
+          await OfflineCacheService.updatePostViews(postId, newViews);
+        }
       }
 
       return true;
@@ -281,29 +244,32 @@ class PostService {
     try {
       final firestore = _firestore;
       if (firestore != null) {
-        await firestore.collection(_postsCollection).doc(postId).update({
-          'likesCount': FieldValue.increment(delta),
-        });
+        try {
+          await firestore.collection(_postsCollection).doc(postId).update({
+            'likesCount': FieldValue.increment(delta),
+          });
+        } catch (_) {}
       }
 
-      // Update local posts cache as well
+      // Update local posts cache
       final idx = AdminService.localPosts.indexWhere((p) => p.id == postId);
       if (idx != -1) {
         final currentLikes = AdminService.localPosts[idx].likesCount;
         final newLikes = currentLikes + delta;
+        final safeLikes = newLikes >= 0 ? newLikes : 0;
         AdminService.localPosts[idx] = AdminService.localPosts[idx].copyWith(
-          likesCount: newLikes >= 0 ? newLikes : 0,
+          likesCount: safeLikes,
         );
-      }
-
-      // Update offline cache
-      final cached = await OfflineCacheService.getCachedPosts();
-      final cIdx = cached.indexWhere((p) => p.id == postId);
-      if (cIdx != -1) {
-        final currentLikes = cached[cIdx].likesCount;
-        final newLikes = currentLikes + delta;
-        cached[cIdx] = cached[cIdx].copyWith(likesCount: newLikes >= 0 ? newLikes : 0);
-        await OfflineCacheService.savePosts(cached);
+        await OfflineCacheService.updatePostLikes(postId, safeLikes, delta > 0);
+      } else {
+        final cached = await OfflineCacheService.getCachedPosts();
+        final cIdx = cached.indexWhere((p) => p.id == postId);
+        if (cIdx != -1) {
+          final currentLikes = cached[cIdx].likesCount;
+          final newLikes = currentLikes + delta;
+          final safeLikes = newLikes >= 0 ? newLikes : 0;
+          await OfflineCacheService.updatePostLikes(postId, safeLikes, delta > 0);
+        }
       }
 
       return true;
@@ -350,80 +316,18 @@ class PostService {
     }
   }
 
-  /// Create a new post (admin only)
-  Future<String> createPost(Post post) async {
-    try {
-      final firestore = _firestore;
-      if (firestore == null) {
-        AdminService.localPosts.insert(0, post);
-        return post.id;
-      }
-
-      final docRef = await firestore.collection(_postsCollection).add(
-        post.toFirestore(),
-      );
-      final created = post.copyWith(id: docRef.id);
-      AdminService.localPosts.insert(0, created);
-      print('✓ Post created: ${docRef.id}');
-      return docRef.id;
-    } catch (e) {
-      print('Notice creating post in Firestore ($e). Storing locally.');
-      AdminService.localPosts.insert(0, post);
-      return post.id;
-    }
-  }
-
-  /// Update a post (admin only)
-  Future<void> updatePost(String postId, Post post) async {
-    try {
-      final firestore = _firestore;
-      if (firestore != null) {
-        await firestore.collection(_postsCollection).doc(postId).update(
-          post.toFirestore(),
-        );
-      }
-      final idx = AdminService.localPosts.indexWhere((p) => p.id == postId);
-      if (idx != -1) {
-        AdminService.localPosts[idx] = post;
-      }
-      print('✓ Post updated: $postId');
-    } catch (e) {
-      print('Notice updating post: $e');
-    }
-  }
-
-  /// Delete a post (admin only)
-  Future<void> deletePost(String postId) async {
-    try {
-      final firestore = _firestore;
-      if (firestore != null) {
-        await firestore.collection(_postsCollection).doc(postId).delete();
-      }
-      AdminService.localPosts.removeWhere((p) => p.id == postId);
-      print('✓ Post deleted: $postId');
-    } catch (e) {
-      print('Notice deleting post: $e');
-      AdminService.localPosts.removeWhere((p) => p.id == postId);
-    }
-  }
-
-  /// Search posts by title, code, or description
+  /// Search posts locally & resiliently by title, post code, or description
   Future<List<Post>> searchPosts(String query) async {
-    try {
-      final all = await fetchPublishedPosts();
-      final q = query.trim().toLowerCase();
-      if (q.isEmpty) return all;
+    final posts = await fetchPublishedPosts();
+    if (query.isEmpty) return posts;
 
-      return all
-          .where((post) =>
-              post.title.toLowerCase().contains(q) ||
-              post.code.toLowerCase().contains(q) ||
-              post.description.toLowerCase().contains(q) ||
-              post.shortDescription.toLowerCase().contains(q))
-          .toList();
-    } catch (e) {
-      print('Notice searching posts: $e');
-      return [];
-    }
+    final q = query.toLowerCase();
+    return posts.where((post) {
+      final matchesTitle = post.title.toLowerCase().contains(q);
+      final matchesCode = post.code.toLowerCase().contains(q);
+      final matchesShortDesc = post.shortDescription.toLowerCase().contains(q);
+      final matchesDesc = post.description.toLowerCase().contains(q);
+      return matchesTitle || matchesCode || matchesShortDesc || matchesDesc;
+    }).toList();
   }
 }

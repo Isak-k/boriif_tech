@@ -1,4 +1,3 @@
-import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../../core/theme/app_colors.dart';
@@ -21,7 +20,6 @@ class PostDetailsScreen extends StatefulWidget {
 }
 
 class _PostDetailsScreenState extends State<PostDetailsScreen> {
-  bool _viewRecorded = false;
 
   @override
   void initState() {
@@ -36,7 +34,6 @@ class _PostDetailsScreenState extends State<PostDetailsScreen> {
   Future<void> _loadPostDetails() async {
     final postProvider = context.read<PostProvider>();
     await postProvider.fetchPostById(widget.postId!);
-    _viewRecorded = true;
   }
 
   @override
@@ -126,26 +123,31 @@ class _PostDetailsScreenState extends State<PostDetailsScreen> {
   }
 
   Widget _buildHeaderImage(dynamic post) {
+    if (post.imageUrl == null || (post.imageUrl as String).isEmpty) {
+      return const SizedBox.shrink();
+    }
+
     return Container(
       width: double.infinity,
-      height: 250,
+      constraints: const BoxConstraints(minHeight: 180, maxHeight: 420),
       decoration: const BoxDecoration(
-        color: AppColors.elevatedSurface,
+        color: Color(0xFF0B1019),
         borderRadius: BorderRadius.only(
           bottomLeft: Radius.circular(16),
           bottomRight: Radius.circular(16),
         ),
       ),
-      child: CachedAppImage(
-        imageUrl: post.imageUrl,
-        width: double.infinity,
-        height: 250,
-        fit: BoxFit.cover,
+      child: ClipRRect(
         borderRadius: const BorderRadius.only(
           bottomLeft: Radius.circular(16),
           bottomRight: Radius.circular(16),
         ),
-        placeholderIcon: Icons.image_outlined,
+        child: CachedAppImage(
+          imageUrl: post.imageUrl,
+          width: double.infinity,
+          fit: BoxFit.contain,
+          placeholderIcon: Icons.image_outlined,
+        ),
       ),
     );
   }
@@ -424,21 +426,17 @@ class _PostDetailsScreenState extends State<PostDetailsScreen> {
   }
 
   Widget _buildVisitWebsiteButton(String externalUrl, String postType) {
-    String label;
-    IconData icon;
+    String label = 'Get it now';
+    IconData icon = Icons.download_rounded;
     
     switch (postType) {
-      case 'job':
-        label = 'Apply Now';
-        icon = Icons.work;
-        break;
       case 'article':
         label = 'Read Full Article';
         icon = Icons.article;
         break;
       default:
-        label = 'Visit Website';
-        icon = Icons.link;
+        label = 'Get it now';
+        icon = Icons.open_in_new_rounded;
     }
 
     return SizedBox(

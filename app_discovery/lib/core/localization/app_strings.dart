@@ -108,16 +108,16 @@ class AppStrings {
       'viewCount': 'views',
       'getItNow': 'Get it now',
       'readArticle': 'Read Full Article',
-      'applyNow': 'Apply Now',
+      'applyNow': 'Get it now',
     },
     'om': {
       'discoverApps': 'App\'ota Argachuu',
       'recent': 'Yeroo Dhihoo',
       'featured': 'Mirkaneeffame',
       'viewCount': 'ilaalaan',
-      'getItNow': 'Amma Argadi',
+      'getItNow': 'Amma Argadhaa',
       'readArticle': 'Barreeffama Guutuu Dubbisi',
-      'applyNow': 'Amma Gaaffadi',
+      'applyNow': 'Amma Argadhaa',
     },
   };
 

@@ -20,6 +20,8 @@ class CategoryService {
 
   /// Fetch all categories (merging remote, local, and offline cache)
   Future<List<Category>> fetchCategories() async {
+    await AdminService.hydrateFromDisk();
+
     try {
       final firestore = _firestore;
       if (firestore == null) {
@@ -28,10 +30,17 @@ class CategoryService {
         return AdminService.localCategories;
       }
 
-      final snapshot = await firestore
-          .collection(_categoriesCollection)
-          .orderBy('name')
-          .get();
+      QuerySnapshot<Map<String, dynamic>> snapshot;
+      try {
+        snapshot = await firestore
+            .collection(_categoriesCollection)
+            .orderBy('name')
+            .get();
+      } catch (_) {
+        snapshot = await firestore
+            .collection(_categoriesCollection)
+            .get();
+      }
 
       final remoteCategories = snapshot.docs
           .map((doc) => Category.fromFirestore(doc))
@@ -43,6 +52,15 @@ class CategoryService {
           combined.add(local);
         }
       }
+
+      final cached = await OfflineCacheService.getCachedCategories();
+      for (final c in cached) {
+        if (!combined.any((cat) => cat.id == c.id || cat.name.toLowerCase() == c.name.toLowerCase())) {
+          combined.add(c);
+        }
+      }
+
+      combined.sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
 
       // Automatically save to local offline cache
       await OfflineCacheService.saveCategories(combined);
@@ -58,6 +76,8 @@ class CategoryService {
 
   /// Listen to categories in real time
   Stream<List<Category>> streamCategories() {
+    AdminService.hydrateFromDisk();
+
     try {
       final firestore = _firestore;
       if (firestore == null) {
@@ -69,7 +89,6 @@ class CategoryService {
 
       return firestore
           .collection(_categoriesCollection)
-          .orderBy('name')
           .snapshots()
           .asyncMap((snapshot) async {
             final remoteCategories = snapshot.docs
@@ -83,7 +102,14 @@ class CategoryService {
               }
             }
 
-            // Save to offline cache
+            final cached = await OfflineCacheService.getCachedCategories();
+            for (final c in cached) {
+              if (!combined.any((cat) => cat.id == c.id || cat.name.toLowerCase() == c.name.toLowerCase())) {
+                combined.add(c);
+              }
+            }
+
+            combined.sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
             await OfflineCacheService.saveCategories(combined);
             return combined;
           })
@@ -101,10 +127,15 @@ class CategoryService {
 
   /// Fetch a single category by ID
   Future<Category?> fetchCategoryById(String categoryId) async {
+    await AdminService.hydrateFromDisk();
+
     try {
-      // Check local cache first
       final local = AdminService.localCategories.where((c) => c.id == categoryId).firstOrNull;
       if (local != null) return local;
+
+      final cached = await OfflineCacheService.getCachedCategories();
+      final cCat = cached.where((c) => c.id == categoryId).firstOrNull;
+      if (cCat != null) return cCat;
 
       final firestore = _firestore;
       if (firestore != null) {
@@ -118,8 +149,7 @@ class CategoryService {
         }
       }
 
-      final cached = await OfflineCacheService.getCachedCategories();
-      return cached.where((c) => c.id == categoryId).firstOrNull;
+      return null;
     } catch (e) {
       print('Notice fetching category: $e');
       final cached = await OfflineCacheService.getCachedCategories();
@@ -129,96 +159,33 @@ class CategoryService {
 
   /// Create a new category (admin only)
   Future<String> createCategory(Category category) async {
-    try {
-      final firestore = _firestore;
-      if (firestore == null) {
-        AdminService.localCategories.add(category);
-        return category.id;
-      }
-
-      final docRef = await firestore
-          .collection(_categoriesCollection)
-          .add(category.toFirestore());
-      print('✓ Category created: ${docRef.id}');
-      return docRef.id;
-    } catch (e) {
-      print('✗ Error creating category: $e');
-      AdminService.localCategories.add(category);
-      return category.id;
-    }
+    return AdminService().createCategory(category.name);
   }
 
   /// Update a category (admin only)
   Future<void> updateCategory(String categoryId, Category category) async {
-    try {
-      final firestore = _firestore;
-      if (firestore == null) throw Exception('Database not available');
-
-      await firestore
-          .collection(_categoriesCollection)
-          .doc(categoryId)
-          .update(category.toFirestore());
-      print('✓ Category updated: $categoryId');
-    } catch (e) {
-      print('✗ Error updating category: $e');
-      rethrow;
-    }
+    return AdminService().updateCategory(categoryId: categoryId, name: category.name);
   }
 
   /// Delete a category (admin only)
   Future<void> deleteCategory(String categoryId) async {
-    try {
-      final firestore = _firestore;
-      if (firestore == null) throw Exception('Database not available');
-
-      await firestore
-          .collection(_categoriesCollection)
-          .doc(categoryId)
-          .delete();
-      print('✓ Category deleted: $categoryId');
-    } catch (e) {
-      print('✗ Error deleting category: $e');
-      rethrow;
-    }
+    return AdminService().deleteCategory(categoryId);
   }
 
   /// Get post count for a category (supports 'all' for all categories)
   Future<int> getPostCountForCategory(String categoryId) async {
-    try {
-      final firestore = _firestore;
-      if (categoryId == 'all' || categoryId.isEmpty) {
-        int localCount = AdminService.localPosts.where((p) => p.isPublished).length;
-        if (firestore == null) return localCount;
-        final snapshot = await firestore
-            .collection('posts')
-            .where('isPublished', isEqualTo: true)
-            .count()
-            .get();
-        return (snapshot.count ?? 0) + localCount;
-      }
+    await AdminService.hydrateFromDisk();
+    final cached = await OfflineCacheService.getCachedPosts();
+    final activePosts = cached.isNotEmpty ? cached : AdminService.localPosts;
 
-      int localCount = AdminService.localPosts
-          .where((p) => p.categoryId == categoryId && p.isPublished)
-          .length;
-
-      if (firestore == null) return localCount;
-
-      final snapshot = await firestore
-          .collection('posts')
-          .where('categoryId', isEqualTo: categoryId)
-          .where('isPublished', isEqualTo: true)
-          .count()
-          .get();
-
-      return (snapshot.count ?? 0) + localCount;
-    } catch (e) {
-      print('Notice fetching post count: $e');
-      if (categoryId == 'all' || categoryId.isEmpty) {
-        return AdminService.localPosts.where((p) => p.isPublished).length;
-      }
-      return AdminService.localPosts
-          .where((p) => p.categoryId == categoryId && p.isPublished)
-          .length;
+    if (categoryId == 'all' || categoryId.isEmpty) {
+      return activePosts.where((p) => p.isPublished).length;
     }
+
+    final query = categoryId.toLowerCase();
+    return activePosts.where((p) {
+      if (!p.isPublished) return false;
+      return p.categoryId.toLowerCase() == query;
+    }).length;
   }
 }

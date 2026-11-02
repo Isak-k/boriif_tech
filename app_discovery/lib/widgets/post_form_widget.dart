@@ -45,7 +45,6 @@ class _PostFormWidgetState extends State<PostFormWidget> {
   String? _selectedCategory;
   
   final _formKey = GlobalKey<FormState>();
-  static const List<String> postTypes = ['app', 'article', 'job'];
 
   @override
   void initState() {
@@ -57,7 +56,7 @@ class _PostFormWidgetState extends State<PostFormWidget> {
     _playStoreUrlController = TextEditingController();
     _externalUrlController = TextEditingController();
     
-    _selectedPostType = widget.initialPostType ?? 'article';
+    _selectedPostType = 'app';
     _selectedCategory = widget.initialCategoryId;
   }
 
@@ -167,30 +166,7 @@ class _PostFormWidgetState extends State<PostFormWidget> {
               ),
               const SizedBox(height: 16),
 
-              // Post Type
-              DropdownButtonFormField<String>(
-                initialValue: _selectedPostType,
-                decoration: const InputDecoration(
-                  hintText: 'Post Type',
-                  prefixIcon: Icon(Icons.category),
-                ),
-                items: postTypes.map((type) {
-                  return DropdownMenuItem(
-                    value: type,
-                    child: Text(type.toUpperCase()),
-                  );
-                }).toList(),
-                onChanged: (value) {
-                  setState(() => _selectedPostType = value);
-                },
-                validator: (value) {
-                  if (value == null) {
-                    return 'Please select a post type';
-                  }
-                  return null;
-                },
-              ),
-              const SizedBox(height: 16),
+
 
               // Category
               DropdownButtonFormField<String>(
